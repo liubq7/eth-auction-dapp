@@ -2,6 +2,7 @@
 pragma solidity >=0.4.21 <0.9.0;
 
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "./DeedRepository.sol";
 
 contract Auction {
     // using Math for uint256;
@@ -12,6 +13,8 @@ contract Auction {
     uint256 public endBlock;
     string public ipfsHash;
     uint256 public bidIncrement;
+    address public deedRepositoryAddress;
+    uint256 public deedId;
 
     // state
     bool public canceled;
@@ -41,7 +44,9 @@ contract Auction {
         uint256 _bidIncrement,
         uint256 _startBlock,
         uint256 _endBlock,
-        string memory _ipfsHash
+        string memory _ipfsHash,
+        address _deedRepositoryAddress,
+        uint256 _deedId
     ) {
         require(_startBlock < _endBlock);
         require(_startBlock >= block.number);
@@ -52,6 +57,8 @@ contract Auction {
         startBlock = _startBlock;
         endBlock = _endBlock;
         ipfsHash = _ipfsHash;
+        deedRepositoryAddress = _deedRepositoryAddress;
+        deedId = _deedId;
     }
 
     modifier onlyAfterStart() {

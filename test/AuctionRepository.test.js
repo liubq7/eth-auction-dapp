@@ -1,71 +1,150 @@
 const AuctionRepository = artifacts.require("./AuctionRepository.sol");
+const DeedRepository = artifacts.require("./DeedRepository.sol");
 
-contract('AuctionRepository', (accounts) => {
+const account0 = "0x32f7F4F67B44Bd47A176f3bc7528359e35d4A0F8";
+const account1 = "0xC1dAe114B3d4FF38E530C638183113184FcDe06f";
+const account2 = "0x835F53ECc165bbD70C138fF3022341c77De414Ab";
+
+contract("AuctionRepository", (accounts) => {
+  let auctionRepository, deedRepository;
   before(async () => {
-    this.auctionRepository = await AuctionRepository.deployed();
-  })
+    auctionRepository = await AuctionRepository.deployed();
+    deedRepository = await DeedRepository.deployed();
+  });
 
-  it('deploys successfully', async () => {
-    const address = await this.auctionRepository.address
-    assert.notEqual(address, 0x0)
-    assert.notEqual(address, '')
-    assert.notEqual(address, null)
-    assert.notEqual(address, undefined)
-  })
+  describe("deployment", async () => {
+    it("deploys successfully", async () => {
+      const auctionRepoAddress = await auctionRepository.address;
+      assert.notEqual(auctionRepoAddress, 0x0);
+      assert.notEqual(auctionRepoAddress, "");
+      assert.notEqual(auctionRepoAddress, null);
+      assert.notEqual(auctionRepoAddress, undefined);
 
-  it('creates auctions', async () => {
-    const result = await this.auctionRepository.createAuction(5, 8, 600, "ipfs")
-    const event = result.logs[0].args
-    assert.equal(event.numAuctions, 1);
-    assert.equal(event.owner, '0xC06a9C14F3E688411e03f07bfD6f5C5BA6830672')
+      const deedRepoAddress = await deedRepository.address;
+      assert.notEqual(deedRepoAddress, 0x0);
+      assert.notEqual(deedRepoAddress, "");
+      assert.notEqual(deedRepoAddress, null);
+      assert.notEqual(deedRepoAddress, undefined);
+    });
 
-    const owner = await this.auctionRepository.getOwner(0)
-    assert.equal(owner, '0xC06a9C14F3E688411e03f07bfD6f5C5BA6830672')
-    const startBlock = await this.auctionRepository.getStartBlock(0)
-    assert.equal(startBlock, 8)
-    const endBlock = await this.auctionRepository.getEndBlock(0)
-    assert.equal(endBlock, 600)
-    const ipfsHash = await this.auctionRepository.getIpfsHash(0)
-    assert.equal(ipfsHash, "ipfs")
-    const bidIncrement = await this.auctionRepository.getBidIncrement(0)
-    assert.equal(bidIncrement, 5)
-    const canceled = await this.auctionRepository.getCanceled(0)
-    assert.equal(canceled, false)
-    const highestBidder = await this.auctionRepository.getHighestBidder(0)
-    assert.equal(highestBidder, '0x0000000000000000000000000000000000000000')
-    const highestBindingBid = await this.auctionRepository.getHighestBindingBid(0)
-    assert.equal(highestBindingBid, 0)
+    it("deed repo has a name", async () => {
+      const name = await deedRepository.name();
+      assert.equal(name, "DeedRepository");
+    });
 
-    const result2 = await this.auctionRepository.createAuction(10, 50, 600, "ipfsHash")
-    const event2 = result2.logs[0].args
-    assert.equal(event2.numAuctions, 2);
-    assert.equal(event2.owner, '0xC06a9C14F3E688411e03f07bfD6f5C5BA6830672')
-  })
+    it("deed repo has a symbol", async () => {
+      const symbol = await deedRepository.symbol();
+      assert.equal(symbol, "DEEDREPO");
+    });
+  });
 
-  it('places bids', async () => {
-    await this.auctionRepository.placeBid(0, {from: accounts[1], value: 10})
-    let highestBidder = await this.auctionRepository.getHighestBidder(0)
-    assert.equal(highestBidder, '0xE5D763520226F07CB7E94BAbd49875Cc8ADfd7d1')
-    let highestBindingBid = await this.auctionRepository.getHighestBindingBid(0)
-    assert.equal(highestBindingBid, 5)
+  describe("mint", async () => {
+    it("registers deed", async () => {
+      const result = await deedRepository.registerDeed();
+      const event = result.logs[0].args;
+      assert.equal(event.to, account0);
+      assert.equal(event.tokenId, 0);
 
-    await this.auctionRepository.placeBid(0, {from: accounts[2], value: 30})
-    highestBidder = await this.auctionRepository.getHighestBidder(0)
-    assert.equal(highestBidder, '0x7e098CB6095f87499445b1F52F79c159fC8b1795')
-    highestBindingBid = await this.auctionRepository.getHighestBindingBid(0)
-    assert.equal(highestBindingBid, 15)
+      await deedRepository.registerDeed();
+      const deedId = await deedRepository.getDeedId();
+      assert.equal(deedId, 1);
+    });
+  });
 
-    await this.auctionRepository.placeBid(0, {from: accounts[3], value: 17})
-    highestBidder = await this.auctionRepository.getHighestBidder(0)
-    assert.equal(highestBidder, '0x7e098CB6095f87499445b1F52F79c159fC8b1795')
-    highestBindingBid = await this.auctionRepository.getHighestBindingBid(0)
-    assert.equal(highestBindingBid, 22)
-  })
+  describe("auction creation", async () => {
+    it("tranfers ownership", async () => {
+      let owner = await deedRepository.ownerOf(0);
+      assert(owner, account0);
 
-  it('cancels auctions', async () => {
-    await this.auctionRepository.cancelAuction(1);
-    const canceled = await this.auctionRepository.getCanceled(1)
-    assert.equal(canceled, true)
-  })
+      await deedRepository.transferFrom(account0, auctionRepository.address, 0);
+      owner = await deedRepository.ownerOf(0);
+      assert.equal(owner, auctionRepository.address);
+    });
 
-})
+    it("creates auctions", async () => {
+      const result = await auctionRepository.createAuction(
+        5,
+        8,
+        600,
+        "ipfs",
+        deedRepository.address,
+        0
+      );
+      const event = result.logs[0].args;
+      assert.equal(event.numAuctions, 1);
+      assert.equal(event.owner, account0);
+
+      const owner = await auctionRepository.getOwner(0);
+      assert.equal(owner, account0);
+      const startBlock = await auctionRepository.getStartBlock(0);
+      assert.equal(startBlock, 8);
+      const endBlock = await auctionRepository.getEndBlock(0);
+      assert.equal(endBlock, 600);
+      const ipfsHash = await auctionRepository.getIpfsHash(0);
+      assert.equal(ipfsHash, "ipfs");
+      const bidIncrement = await auctionRepository.getBidIncrement(0);
+      assert.equal(bidIncrement, 5);
+      const canceled = await auctionRepository.getCanceled(0);
+      assert.equal(canceled, false);
+      const highestBidder = await auctionRepository.getHighestBidder(0);
+      assert.equal(highestBidder, "0x0000000000000000000000000000000000000000");
+      const highestBindingBid = await auctionRepository.getHighestBindingBid(0);
+      assert.equal(highestBindingBid, 0);
+
+      await deedRepository.transferFrom(account0, auctionRepository.address, 1);
+      const result2 = await auctionRepository.createAuction(
+        10,
+        50,
+        600,
+        "ipfsHash",
+        deedRepository.address,
+        1
+      );
+      const event2 = result2.logs[0].args;
+      assert.equal(event2.numAuctions, 2);
+      assert.equal(event2.owner, account0);
+    });
+  });
+
+  describe("bid placement", async () => {
+    it("places bids", async () => {
+      await auctionRepository.placeBid(0, {
+        from: accounts[1],
+        value: 10,
+      });
+      let highestBidder = await auctionRepository.getHighestBidder(0);
+      assert.equal(highestBidder, account1);
+      let highestBindingBid = await auctionRepository.getHighestBindingBid(0);
+      assert.equal(highestBindingBid, 5);
+
+      await auctionRepository.placeBid(0, {
+        from: accounts[2],
+        value: 30,
+      });
+      highestBidder = await auctionRepository.getHighestBidder(0);
+      assert.equal(highestBidder, account2);
+      highestBindingBid = await auctionRepository.getHighestBindingBid(0);
+      assert.equal(highestBindingBid, 15);
+
+      await auctionRepository.placeBid(0, {
+        from: accounts[3],
+        value: 17,
+      });
+      highestBidder = await auctionRepository.getHighestBidder(0);
+      assert.equal(highestBidder, account2);
+      highestBindingBid = await auctionRepository.getHighestBindingBid(0);
+      assert.equal(highestBindingBid, 22);
+    });
+  });
+
+  describe("cancel", async () => {
+    it("cancels auctions", async () => {
+      await auctionRepository.cancelAuction(1);
+      const canceled = await auctionRepository.getCanceled(1);
+      assert.equal(canceled, true);
+
+      const owner = await deedRepository.ownerOf(1);
+      assert(owner, account0);
+    });
+  });
+});

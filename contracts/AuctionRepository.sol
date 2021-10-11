@@ -1,29 +1,46 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.4.21 <0.9.0;
 
-import {Auction} from "./Auction.sol";
+import "./Auction.sol";
+import "./DeedRepository.sol";
 
 contract AuctionRepository {
     Auction[] public auctions;
 
     event AuctionCreated(address owner, uint256 numAuctions);
 
+    modifier contractIsDeedOwner(address _deedRepositoryAddress, uint256 _deedId) {
+        address deedOwner = DeedRepository(_deedRepositoryAddress).ownerOf(_deedId);
+        require(deedOwner == address(this));
+        _;
+    }
+
     function createAuction(
         uint256 _bidIncrement,
         uint256 _startBlock,
         uint256 _endBlock,
-        string memory _ipfsHash
-    ) public {
+        string memory _ipfsHash,
+        address _deedRepositoryAddress,
+        uint256 _deedId
+    ) public contractIsDeedOwner(_deedRepositoryAddress, _deedId) {
         Auction newAuction = new Auction(
             msg.sender,
             _bidIncrement,
             _startBlock,
             _endBlock,
-            _ipfsHash
+            _ipfsHash,
+            _deedRepositoryAddress,
+            _deedId
         );
         auctions.push(newAuction);
 
         emit AuctionCreated(msg.sender, auctions.length);
+    }
+
+    function deedTransfer(address _from, address _to, address _deedRepositoryAddress, uint256 _deedId) internal returns(bool) {
+        DeedRepository remoteContract = DeedRepository(_deedRepositoryAddress);
+        remoteContract.transferFrom(_from, _to, _deedId);
+        return true;
     }
 
     function getAuctions() public view returns (Auction[] memory) {
@@ -67,10 +84,17 @@ contract AuctionRepository {
     }
 
     function withdraw(uint _i) public returns (bool) {
+        if (msg.sender == auctions[_i].owner() && !auctions[_i].canceled()) {
+            deedTransfer(address(this), auctions[_i].highestBidder(), auctions[_i].deedRepositoryAddress(), auctions[_i].deedId());
+        }
         return auctions[_i].withdraw(msg.sender);
+        
     }
 
     function cancelAuction(uint _i) public returns (bool) {
-        return auctions[_i].cancelAuction(msg.sender);
+        if(deedTransfer(address(this), auctions[_i].owner(), auctions[_i].deedRepositoryAddress(), auctions[_i].deedId())){
+            return auctions[_i].cancelAuction(msg.sender);
+        }
+        return false;
     }
 }
